@@ -2,141 +2,112 @@ import short from "short-uuid";
 import { v5 as uuidv5 } from "uuid";
 
 import { getIntegrationName } from "@lib/integrations";
-import { VideoCallData } from "@lib/videoClient";
 
-import { CalendarEvent } from "./calendarClient";
-import { stripHtml } from "./emails/helpers";
+import { CalendarEvent, Person } from "./calendarClient";
+import { BASE_URL } from "./config/constants";
 
 const translator = short();
 
-export default class CalEventParser {
-  protected calEvent: CalendarEvent;
-  protected maybeUid?: string;
-  protected optionalVideoCallData?: VideoCallData;
+// The odd indentation in this file is necessary because otherwise the leading tabs will be applied into the event description.
 
-  constructor(calEvent: CalendarEvent, maybeUid?: string, optionalVideoCallData?: VideoCallData) {
-    this.calEvent = calEvent;
-    this.maybeUid = maybeUid;
-    this.optionalVideoCallData = optionalVideoCallData;
-  }
+export const getWhat = (calEvent: CalendarEvent) => {
+  return `
+${calEvent.language("what")}:
+${calEvent.type}
+  `;
+};
 
-  /**
-   * Returns a link to reschedule the given booking.
-   */
-  public getRescheduleLink(): string {
-    return process.env.BASE_URL + "/reschedule/" + this.getUid();
-  }
+export const getWhen = (calEvent: CalendarEvent) => {
+  return `
+${calEvent.language("invitee_timezone")}:
+${calEvent.attendees[0].timeZone}
+  `;
+};
 
-  /**
-   * Returns a link to cancel the given booking.
-   */
-  public getCancelLink(): string {
-    return process.env.BASE_URL + "/cancel/" + this.getUid();
-  }
-
-  /**
-   * Returns a unique identifier for the given calendar event.
-   */
-  public getUid(): string {
-    return this.maybeUid ?? translator.fromUUID(uuidv5(JSON.stringify(this.calEvent), uuidv5.URL));
-  }
-
-  /**
-   * Returns a footer section with links to change the event (as HTML).
-   */
-  public getChangeEventFooterHtml(): string {
-    return `<p style="color: #4b5563; margin-top: 20px;">Need to make a change? <a href="${this.getCancelLink()}" style="color: #161e2e;">Cancel</a> or <a href="${this.getRescheduleLink()}" style="color: #161e2e;">reschedule</a></p>`;
-  }
-
-  /**
-   * Returns a footer section with links to change the event (as plain text).
-   */
-  public getChangeEventFooter(): string {
-    return stripHtml(this.getChangeEventFooterHtml());
-  }
-
-  /**
-   * Returns an extended description with all important information (as HTML).
-   *
-   * @protected
-   */
-  public getRichDescriptionHtml(): string {
-    // This odd indentation is necessary because otherwise the leading tabs will be applied into the event description.
-    return (
-      `
-<strong>Event Type:</strong><br />${this.calEvent.type}<br />
-<strong>Invitee Email:</strong><br /><a href="mailto:${this.calEvent.attendees[0].email}">${this.calEvent.attendees[0].email}</a><br />
-` +
-      (this.getLocation()
-        ? `<strong>Location:</strong><br />${this.getLocation()}<br />
-`
-        : "") +
-      `<strong>Invitee Time Zone:</strong><br />${this.calEvent.attendees[0].timeZone}<br />
-<strong>Additional notes:</strong><br />${this.getDescriptionText()}<br />` +
-      this.getChangeEventFooterHtml()
-    );
-  }
-
-  /**
-   * Conditionally returns the event's location. When VideoCallData is set,
-   * it returns the meeting url. Otherwise, the regular location is returned.
-   * For Daily video calls returns the direct link
-   * @protected
-   */
-  protected getLocation(): string | undefined {
-    const isDaily = this.calEvent.location === "integrations:daily";
-    if (this.optionalVideoCallData) {
-      return this.optionalVideoCallData.url;
-    }
-    if (isDaily) {
-      return process.env.BASE_URL + "/call/" + this.getUid();
-    }
-    return this.calEvent.location;
-  }
-
-  /**
-   * Returns the event's description text. If VideoCallData is set, it prepends
-   * some video call information before the text as well.
-   *
-   * @protected
-   */
-  protected getDescriptionText(): string | undefined {
-    if (this.optionalVideoCallData) {
+export const getWho = (calEvent: CalendarEvent) => {
+  const attendees = calEvent.attendees
+    .map((attendee) => {
       return `
-${getIntegrationName(this.optionalVideoCallData.type)} meeting
-ID: ${this.optionalVideoCallData.id}
-Password: ${this.optionalVideoCallData.password}
-${this.calEvent.description}`;
-    }
-    return this.calEvent.description;
+${attendee?.name || calEvent.language("guest")}
+${attendee.email}
+      `;
+    })
+    .join("");
+
+  const organizer = `
+${calEvent.organizer.name} - ${calEvent.language("organizer")}
+${calEvent.organizer.email}
+  `;
+
+  return `
+${calEvent.language("who")}:
+${organizer + attendees}
+  `;
+};
+
+export const getAdditionalNotes = (calEvent: CalendarEvent) => {
+  return `
+${calEvent.language("additional_notes")}:
+${calEvent.description}
+  `;
+};
+
+export const getLocation = (calEvent: CalendarEvent) => {
+  let providerName = calEvent.location ? getIntegrationName(calEvent.location) : "";
+
+  if (calEvent.location && calEvent.location.includes("integrations:")) {
+    const location = calEvent.location.split(":")[1];
+    providerName = location[0].toUpperCase() + location.slice(1);
   }
 
-  /**
-   * Returns an extended description with all important information (as plain text).
-   *
-   * @protected
-   */
-  public getRichDescription(): string {
-    return stripHtml(this.getRichDescriptionHtml());
+  if (calEvent.videoCallData) {
+    return calEvent.videoCallData.url;
   }
 
-  /**
-   * Returns a calendar event with rich description.
-   */
-  public asRichEvent(): CalendarEvent {
-    const eventCopy: CalendarEvent = { ...this.calEvent };
-    eventCopy.description = this.getRichDescriptionHtml();
-    eventCopy.location = this.getLocation();
-    return eventCopy;
+  if (calEvent.additionInformation?.hangoutLink) {
+    return calEvent.additionInformation.hangoutLink;
   }
 
-  /**
-   * Returns a calendar event with rich description as plain text.
-   */
-  public asRichEventPlain(): CalendarEvent {
-    const eventCopy: CalendarEvent = { ...this.calEvent };
-    eventCopy.description = this.getRichDescription();
-    eventCopy.location = this.getLocation();
-    return eventCopy;
+  return providerName || calEvent.location || "";
+};
+
+export const getManageLink = (calEvent: CalendarEvent) => {
+  return `
+${calEvent.language("need_to_reschedule_or_cancel")}
+${getCancelLink(calEvent)}
+  `;
+};
+
+export const getUid = (calEvent: CalendarEvent): string => {
+  return calEvent.uid ?? translator.fromUUID(uuidv5(JSON.stringify(calEvent), uuidv5.URL));
+};
+
+export const getCancelLink = (calEvent: CalendarEvent): string => {
+  return BASE_URL + "/cancel/" + getUid(calEvent);
+};
+
+export const getRichDescription = (calEvent: CalendarEvent, attendee?: Person) => {
+  // Only the original attendee can make changes to the event
+  // Guests cannot
+
+  if (attendee && attendee === calEvent.attendees[0]) {
+    return `
+${getWhat(calEvent)}
+${getWhen(calEvent)}
+${getWho(calEvent)}
+${calEvent.language("where")}:
+${getLocation(calEvent)}
+${getAdditionalNotes(calEvent)}
+  `.trim();
   }
-}
+
+  return `
+${getWhat(calEvent)}
+${getWhen(calEvent)}
+${getWho(calEvent)}
+${calEvent.language("where")}:
+${getLocation(calEvent)}
+${getAdditionalNotes(calEvent)}
+${getManageLink(calEvent)}
+  `.trim();
+};

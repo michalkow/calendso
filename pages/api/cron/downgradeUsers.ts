@@ -6,10 +6,21 @@ import prisma from "@lib/prisma";
 const TRIAL_LIMIT_DAYS = 14;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const apiKey = req.query.apiKey;
+  const apiKey = req.headers.authorization || req.query.apiKey;
   if (process.env.CRON_API_KEY !== apiKey) {
-    return res.status(401).json({ message: "Not authenticated" });
+    res.status(401).json({ message: "Not authenticated" });
+    return;
   }
+  if (req.method !== "POST") {
+    res.status(405).json({ message: "Invalid method" });
+    return;
+  }
+
+  /**
+   * TODO:
+   * We should add and extra check for non-paying customers in Stripe so we can
+   * downgrade them here.
+   */
 
   await prisma.user.updateMany({
     data: {

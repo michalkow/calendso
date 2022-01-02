@@ -1,22 +1,30 @@
-import { Booking } from "@prisma/client";
+import { Attendee, Booking } from "@prisma/client";
 
-import { LocationType } from "@lib/location";
+export type BookingConfirmBody = {
+  confirmed: boolean;
+  id: number;
+};
 
 export type BookingCreateBody = {
   email: string;
   end: string;
   eventTypeId: number;
-  guests: string[];
-  location?: LocationType;
+  guests?: string[];
+  location: string;
   name: string;
-  notes: string;
+  notes?: string;
   rescheduleUid?: string;
   start: string;
   timeZone: string;
-  users?: string[];
-  user?: string;
+  user?: string | string[];
+  language: string;
+  customInputs: { label: string; value: string }[];
+  metadata: {
+    [key: string]: string;
+  };
 };
 
 export type BookingResponse = Booking & {
   paymentUid?: string;
+  attendees: Attendee[];
 };

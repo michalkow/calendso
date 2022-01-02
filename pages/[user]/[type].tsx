@@ -2,10 +2,13 @@ import { Prisma } from "@prisma/client";
 import { GetServerSidePropsContext } from "next";
 
 import { asStringOrNull } from "@lib/asStringOrNull";
+import { getWorkingHours } from "@lib/availability";
 import prisma from "@lib/prisma";
 import { inferSSRProps } from "@lib/types/inferSSRProps";
 
 import AvailabilityPage from "@components/booking/pages/AvailabilityPage";
+
+import { ssrInit } from "@server/lib/ssr";
 
 export type AvailabilityPageProps = inferSSRProps<typeof getServerSideProps>;
 
@@ -14,6 +17,7 @@ export default function Type(props: AvailabilityPageProps) {
 }
 
 export const getServerSideProps = async (context: GetServerSidePropsContext) => {
+  const ssr = await ssrInit(context);
   // get query params and typecast them to string
   // (would be even better to assert them instead of typecasting)
   const userParam = asStringOrNull(context.query.user);
@@ -39,6 +43,8 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
     periodCountCalendarDays: true,
     schedulingType: true,
     minimumBookingNotice: true,
+    timeZone: true,
+    slotInterval: true,
     users: {
       select: {
         avatar: true,
@@ -46,6 +52,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
         username: true,
         hideBranding: true,
         plan: true,
+        timeZone: true,
       },
     },
   });
@@ -67,6 +74,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
       weekStart: true,
       availability: true,
       hideBranding: true,
+      brandColor: true,
       theme: true,
       plan: true,
       eventTypes: {
@@ -116,6 +124,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
       username: user.username,
       hideBranding: user.hideBranding,
       plan: user.plan,
+      timeZone: user.timeZone,
     });
     user.eventTypes.push(eventTypeBackwardsCompat);
   }
@@ -152,26 +161,20 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
       } as const;
     }
   }*/
-  const getWorkingHours = (availability: typeof user.availability | typeof eventType.availability) =>
-    availability && availability.length ? availability : null;
-
-  const workingHours =
-    getWorkingHours(eventType.availability) ||
-    getWorkingHours(user.availability) ||
-    [
-      {
-        days: [0, 1, 2, 3, 4, 5, 6],
-        startTime: user.startTime,
-        endTime: user.endTime,
-      },
-    ].filter((availability): boolean => typeof availability["days"] !== "undefined");
-
-  workingHours.sort((a, b) => a.startTime - b.startTime);
 
   const eventTypeObject = Object.assign({}, eventType, {
     periodStartDate: eventType.periodStartDate?.toString() ?? null,
     periodEndDate: eventType.periodEndDate?.toString() ?? null,
   });
+
+  const workingHours = getWorkingHours(
+    {
+      timeZone: eventType.timeZone || user.timeZone,
+    },
+    eventType.availability.length ? eventType.availability : user.availability
+  );
+
+  eventTypeObject.availability = [];
 
   return {
     props: {
@@ -181,10 +184,12 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
         slug: user.username,
         theme: user.theme,
         weekStart: user.weekStart,
+        brandColor: user.brandColor,
       },
       date: dateParam,
       eventType: eventTypeObject,
       workingHours,
+      trpcState: ssr.dehydrate(),
     },
   };
 };

@@ -9,16 +9,17 @@ import { inferQueryOutput, trpc } from "@lib/trpc";
 
 import TableActions, { ActionType } from "@components/ui/TableActions";
 
-type BookingItem = inferQueryOutput<"viewer.bookings">[number];
+type BookingItem = inferQueryOutput<"viewer.bookings">["bookings"][number];
 
 function BookingListItem(booking: BookingItem) {
-  const { t } = useLocale();
+  const { t, i18n } = useLocale();
   const utils = trpc.useContext();
+
   const mutation = useMutation(
     async (confirm: boolean) => {
       const res = await fetch("/api/book/confirm", {
         method: "PATCH",
-        body: JSON.stringify({ id: booking.id, confirmed: confirm }),
+        body: JSON.stringify({ id: booking.id, confirmed: confirm, language: i18n.language }),
         headers: {
           "Content-Type": "application/json",
         },
@@ -72,49 +73,47 @@ function BookingListItem(booking: BookingItem) {
   const startTime = dayjs(booking.startTime).format(isUpcoming ? "ddd, D MMM" : "D MMMM YYYY");
 
   return (
-    <tr>
-      <td className="hidden sm:table-cell px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900">{startTime}</div>
+    <tr className="flex">
+      <td className="hidden px-6 py-4 align-top sm:table-cell whitespace-nowrap">
+        <div className="text-sm leading-6 text-gray-900">{startTime}</div>
         <div className="text-sm text-gray-500">
           {dayjs(booking.startTime).format("HH:mm")} - {dayjs(booking.endTime).format("HH:mm")}
         </div>
-        {!booking.confirmed && !booking.rejected && (
-          <span className="mb-2 inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium bg-yellow-100 text-yellow-800">
-            {t("unconfirmed")}
-          </span>
-        )}
       </td>
-      <td className={"px-6 py-4" + (booking.rejected ? " line-through" : "")}>
+      <td className={"px-6 py-4 flex-1" + (booking.rejected ? " line-through" : "")}>
         <div className="sm:hidden">
-          {!booking.confirmed && !booking.rejected && (
-            <span className="mb-2 inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium bg-yellow-100 text-yellow-800">
-              {t("unconfirmed")}
-            </span>
-          )}
-          <div className="text-sm text-gray-900 font-medium">
+          {!booking.confirmed && !booking.rejected && <Tag className="mb-2 mr-2">{t("unconfirmed")}</Tag>}
+          {!!booking?.eventType?.price && !booking.paid && <Tag className="mb-2 mr-2">Pending payment</Tag>}
+          <div className="text-sm font-medium text-gray-900">
             {startTime}:{" "}
             <small className="text-sm text-gray-500">
               {dayjs(booking.startTime).format("HH:mm")} - {dayjs(booking.endTime).format("HH:mm")}
             </small>
           </div>
         </div>
-        <div className="text-sm text-neutral-900 font-medium  truncate max-w-60 md:max-w-96">
+        <div className="text-sm font-medium leading-6 truncate text-neutral-900 max-w-52 md:max-w-max">
           {booking.eventType?.team && <strong>{booking.eventType.team.name}: </strong>}
           {booking.title}
+          {!!booking?.eventType?.price && !booking.paid && (
+            <Tag className="hidden ml-2 sm:inline-flex">Pending payment</Tag>
+          )}
+          {!booking.confirmed && !booking.rejected && (
+            <Tag className="hidden ml-2 sm:inline-flex">{t("unconfirmed")}</Tag>
+          )}
         </div>
         {booking.description && (
-          <div className="text-sm text-neutral-600 truncate max-w-60 md:max-w-96" title={booking.description}>
+          <div className="text-sm text-gray-500 truncate max-w-52 md:max-w-96" title={booking.description}>
             &quot;{booking.description}&quot;
           </div>
         )}
         {booking.attendees.length !== 0 && (
-          <div className="text-sm text-blue-500">
+          <div className="text-sm text-gray-900 hover:text-blue-500">
             <a href={"mailto:" + booking.attendees[0].email}>{booking.attendees[0].email}</a>
           </div>
         )}
       </td>
 
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+      <td className="px-6 py-4 text-sm font-medium text-right whitespace-nowrap">
         {isUpcoming && !isCancelled ? (
           <>
             {!booking.confirmed && !booking.rejected && <TableActions actions={pendingActions} />}
@@ -128,5 +127,14 @@ function BookingListItem(booking: BookingItem) {
     </tr>
   );
 }
+
+const Tag = ({ children, className = "" }: React.PropsWithChildren<{ className?: string }>) => {
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium bg-yellow-100 text-yellow-800 ${className}`}>
+      {children}
+    </span>
+  );
+};
 
 export default BookingListItem;
