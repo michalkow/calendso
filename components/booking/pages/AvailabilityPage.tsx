@@ -147,7 +147,7 @@ const AvailabilityPage = ({ profile, eventType, workingHours }: Props) => {
                     </div>
                   </div>
                 </div>
-                <p className="mt-3 text-gray-600 dark:text-gray-200">{eventType.description}</p>
+                <p className="mt-3 text-gray-600 dark:text-gray-200" style={{ whiteSpace: 'break-spaces' }}>{eventType.description}</p>
               </div>
 
               <div className="px-4 sm:flex sm:py-5 sm:p-4">
@@ -195,7 +195,7 @@ const AvailabilityPage = ({ profile, eventType, workingHours }: Props) => {
 
                   <TimezoneDropdown />
 
-                  <p className="mt-3 mb-8 text-gray-600 dark:text-gray-200">{eventType.description}</p>
+                  <p className="mt-3 mb-8 text-gray-600 dark:text-gray-200" style={{ whiteSpace: 'break-spaces' }}>{eventType.description}</p>
                 </div>
                 <DatePicker
                   date={selectedDate}
